@@ -1,7 +1,7 @@
+# Versión mínima para probar
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-
+import plotly.express as px  # Reemplazo recomendado para matplotlib
 # Configuración básica
 st.set_page_config(layout="wide", page_title="Dashboard Financiero")
 
