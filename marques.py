@@ -11,8 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cargar datos (reemplaza con tu carga real de datos)
-@st.cache_data
+
 def load_data():
     ventas = pd.read_excel("Resumen Financiero MAYO 2025.xlsx", sheet_name="Ventas")
     nomina = pd.read_excel("Resumen Financiero MAYO 2025.xlsx", sheet_name="Nómina")
@@ -22,7 +21,7 @@ def load_data():
     return ventas, nomina, impuestos, cuentas_pagar, bancos
 
 ventas, nomina, impuestos, cuentas_pagar, bancos = load_data()
-"""
+
 # Procesamiento de datos (ejemplos básicos)
 ventas['Fecha'] = pd.to_datetime(ventas['Fecha'])
 nomina['Fecha'] = pd.to_datetime(nomina['Fecha'])
@@ -325,12 +324,3 @@ elif pagina == "Bancos":
                  title='Distribución de Saldo por Banco')
     st.plotly_chart(fig5, use_container_width=True)
 
-# Notas finales
-st.sidebar.markdown("---")
-st.sidebar.info("""
-**Notas:**
-- Datos correspondientes a Mayo 2025
-- Actualización diaria automática
-- Contacto: admin@empresa.com
-""")
-"""
