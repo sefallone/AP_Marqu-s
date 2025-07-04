@@ -22,7 +22,7 @@ def load_data():
     return ventas, nomina, impuestos, cuentas_pagar, bancos
 
 ventas, nomina, impuestos, cuentas_pagar, bancos = load_data()
-
+"""
 # Procesamiento de datos (ejemplos básicos)
 ventas['Fecha'] = pd.to_datetime(ventas['Fecha'])
 nomina['Fecha'] = pd.to_datetime(nomina['Fecha'])
@@ -333,3 +333,4 @@ st.sidebar.info("""
 - Actualización diaria automática
 - Contacto: admin@empresa.com
 """)
+"""
