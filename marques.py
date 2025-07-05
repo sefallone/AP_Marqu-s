@@ -10,10 +10,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# Función para cargar datos desde el archivo subido
+# Función para cargar datos desde un archivo
 def load_data(uploaded_file):
     try:
-        # Lista de hojas requeridas
+        # Lista de hojas requeridas para el dashboard completo
         required_sheets = ["Ventas", "Nómina", "Impuestos", "Cuentas x Pagar", "Bancos"]
         
         # Leer el archivo Excel y verificar hojas
@@ -35,37 +35,71 @@ def load_data(uploaded_file):
         st.error(f"Error al leer el archivo: {str(e)}")
         return None
 
-# Widget para cargar archivo (sidebar o main)
-uploaded_file = st.sidebar.file_uploader(
-    "📤 Sube tu archivo Excel financiero",
-    type=["xlsx", "xls"],
-    help="El archivo debe contener hojas específicas (Ventas, Nómina, etc.)"
-)
-
-# Mostrar instrucciones si no hay archivo
-if uploaded_file is None:
-    st.info("👋 Por favor, sube un archivo Excel para comenzar.")
-    st.stop()  # Detener la ejecución si no hay archivo
-
-# Cargar datos
-ventas, nomina, impuestos, cuentas_pagar, bancos = load_data(uploaded_file)
-
-# Verificar si los datos se cargaron correctamente
-if ventas is None:
-    st.error("No se pudieron cargar los datos. Verifica el archivo.")
-    st.stop()
-
-ventas['Fecha'] = pd.to_datetime(ventas['Fecha'])
-nomina['Fecha'] = pd.to_datetime(nomina['Fecha'])
-impuestos['Fecha'] = pd.to_datetime(impuestos['Fecha'])
-bancos['Fecha'] = pd.to_datetime(bancos['Fecha'])
+# Función para cargar solo los datos comparativos (Ventas, Nómina, Impuestos)
+def load_comparison_data(uploaded_file, label):
+    try:
+        required_sheets = ["Ventas", "Nómina", "Impuestos"]
+        with pd.ExcelFile(uploaded_file) as xls:
+            if not all(sheet in xls.sheet_names for sheet in required_sheets):
+                missing = [sheet for sheet in required_sheets if sheet not in xls.sheet_names]
+                return None, f"Faltan hojas: {', '.join(missing)}"
+            
+            ventas = pd.read_excel(xls, sheet_name="Ventas")
+            nomina = pd.read_excel(xls, sheet_name="Nómina")
+            impuestos = pd.read_excel(xls, sheet_name="Impuestos")
+            
+            # Calcular totales
+            totals = {
+                "Ventas": ventas['Totales'].sum(),
+                "Nómina": nomina['$_Nómina_Quincenal'].sum(),
+                "Impuestos": impuestos['Monto_$'].sum(),
+                "Período": label
+            }
+            return totals, None
+    except Exception as e:
+        return None, f"Error: {str(e)}"
 
 # Sidebar para navegación
 st.sidebar.title("Navegación")
 pagina = st.sidebar.radio(
     "Seleccione una sección:",
-    ("Resumen General", "Ventas", "Nómina", "Impuestos", "Cuentas por Pagar", "Bancos")
+    ("Resumen General", "Ventas", "Nómina", "Impuestos", "Cuentas por Pagar", "Bancos", "Comparativo")
 )
+
+# Widget para cargar archivo principal (excepto en la página de comparativo)
+if pagina != "Comparativo":
+    uploaded_file = st.sidebar.file_uploader(
+        "📤 Sube tu archivo Excel financiero",
+        type=["xlsx", "xls"],
+        help="El archivo debe contener todas las hojas requeridas"
+    )
+
+    # Mostrar instrucciones si no hay archivo
+    if uploaded_file is None:
+        st.info("👋 Por favor, sube un archivo Excel para comenzar.")
+        st.stop()
+
+    # Cargar datos del archivo principal
+    data = load_data(uploaded_file)
+    if data is None:
+        st.stop()
+    
+    ventas, nomina, impuestos, cuentas_pagar, bancos = data
+
+    # Procesamiento de fechas
+    ventas['Fecha'] = pd.to_datetime(ventas['Fecha'])
+    nomina['Fecha'] = pd.to_datetime(nomina['Fecha'])
+    impuestos['Fecha'] = pd.to_datetime(impuestos['Fecha'])
+    bancos['Fecha'] = pd.to_datetime(bancos['Fecha'])
+
+
+# Sidebar para navegación
+st.sidebar.title("Navegación")
+pagina = st.sidebar.radio(
+    "Seleccione una sección:",
+    ("Resumen General", "Ventas", "Nómina", "Impuestos", "Cuentas por Pagar", "Bancos", "Comparativo")
+)
+
 
 
 # Página de Resumen General
@@ -356,6 +390,91 @@ elif pagina == "Bancos":
     fig5 = px.pie(bank_summary, values='Saldo', names='Banco', 
                  title='Distribución de Saldo por Banco')
     st.plotly_chart(fig5, use_container_width=True)
+
+elif pagina == "Comparativo":
+    st.title("🔍 Comparativo Financiero Multiperíodo")
+    
+    # Widget para cargar hasta 3 archivos
+    uploaded_files = []
+    cols = st.columns(3)
+    for i in range(3):
+        with cols[i]:
+            file = st.file_uploader(
+                f"Archivo {i+1} (Período comparativo)",
+                type=["xlsx", "xls"],
+                key=f"comp_file_{i}"
+            )
+            if file:
+                uploaded_files.append((file, f"Período {i+1}"))
+
+    # Procesar archivos si hay al menos uno cargado
+    if not uploaded_files:
+        st.info("ℹ Sube al menos 1 archivo Excel para comenzar la comparación")
+        st.stop()
+
+    # Procesamiento de archivos
+    results = []
+    errors = []
+    for file, label in uploaded_files:
+        data, error = load_comparison_data(file, label)
+        if error:
+            errors.append(f"{label}: {error}")
+        elif data:
+            results.append(data)
+
+    # Mostrar errores si los hay
+    if errors:
+        st.error("### Errores en archivos:")
+        for error in errors:
+            st.write(f"❌ {error}")
+
+    if not results:
+        st.error("No se pudo procesar ningún archivo válido")
+        st.stop()
+
+    # Crear DataFrame comparativo
+    df_comparativo = pd.DataFrame(results).set_index("Período")
+    st.success("✅ Comparación generada correctamente")
+
+    # Visualizaciones comparativas
+    st.divider()
+    st.header("Análisis Comparativo")
+
+    # 1. Tabla resumen
+    st.subheader("Tabla de Totales")
+    st.dataframe(df_comparativo.style.format("${:,.2f}"), use_container_width=True)
+
+    # 2. Gráfico de barras comparativas
+    st.subheader("Comparación Visual")
+    fig = px.bar(
+        df_comparativo.reset_index(),
+        x="Período",
+        y=df_comparativo.columns,
+        barmode="group",
+        text_auto=".2s",
+        labels={"value": "Monto ($)", "variable": "Categoría"},
+        height=500
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 3. Métricas de variación (si hay exactamente 2 archivos)
+    if len(results) == 2:
+        st.subheader("🔃 Variación porcentual")
+        col1, col2, col3 = st.columns(3)
+        delta_ventas = ((df_comparativo.iloc[1]['Ventas'] - df_comparativo.iloc[0]['Ventas']) / df_comparativo.iloc[0]['Ventas']) * 100
+        delta_nomina = ((df_comparativo.iloc[1]['Nómina'] - df_comparativo.iloc[0]['Nómina']) / df_comparativo.iloc[0]['Nómina']) * 100
+        delta_impuestos = ((df_comparativo.iloc[1]['Impuestos'] - df_comparativo.iloc[0]['Impuestos']) / df_comparativo.iloc[0]['Impuestos']) * 100
+        
+        col1.metric("Ventas", 
+                    f"${df_comparativo.iloc[1]['Ventas']:,.2f}", 
+                    f"{delta_ventas:.1f}%")
+        col2.metric("Nómina", 
+                    f"${df_comparativo.iloc[1]['Nómina']:,.2f}", 
+                    f"{delta_nomina:.1f}%")
+        col3.metric("Impuestos", 
+                    f"${df_comparativo.iloc[1]['Impuestos']:,.2f}", 
+                    f"{delta_impuestos:.1f}%")
+
     
 
 
